@@ -1,0 +1,13 @@
+{
+	"autodeskProduct":	"Fusion360",
+	"type":	"addin",
+	"id":	"837bfeec-ee64-4d89-8790-48f5a971e7af",
+	"author":	"Matt Lynch",
+	"description":	{
+		"":	"A simple add-in to create a timber list from selected timbers."
+	},
+	"version":	"1.0",
+	"runOnStartup":	false,
+	"supportedOS":	"windows|mac",
+	"editEnabled":	true
+}
