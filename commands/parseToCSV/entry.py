@@ -24,7 +24,8 @@ IS_PROMOTED = True
 # command it will be inserted beside. Not providing the command to position it
 # will insert it at the end.
 WORKSPACE_ID = 'FusionSolidEnvironment'
-PANEL_ID = 'SolidScriptsAddinsPanel'
+TOOLBAR_TAB = 'SolidTab'
+PANEL_ID = 'AssemblePanel'
 COMMAND_BESIDE_ID = 'Timber List'
 
 # Resource location for command icons, here we assume a sub folder in this directory named "resources".
@@ -46,8 +47,11 @@ def start():
     # Get the target workspace the button will be created in.
     workspace = ui.workspaces.itemById(WORKSPACE_ID)
 
+    # Get the tab the button will be created in.
+    solidTab = workspace.toolbarTabs.itemById('SolidTab')
+
     # Get the panel the button will be created in.
-    panel = workspace.toolbarPanels.itemById(PANEL_ID)
+    panel = solidTab.toolbarPanels.itemById(PANEL_ID)
 
     # Create the button command control in the UI after the specified existing command.
     control = panel.controls.addCommand(cmd_def, COMMAND_BESIDE_ID, False)
