@@ -6,6 +6,7 @@ import adsk.fusion
 import traceback
 import csv
 from fractions import Fraction
+import math
 
 app = adsk.core.Application.get()
 ui = app.userInterface
@@ -88,9 +89,12 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
 
     # TODO Define the dialog for your command by adding different inputs to the command.
 
-    selectionInput = inputs.addSelectionInput(CMD_ID + '_selection', 'Select',
-                                              'Select bodies or occurrences')
+    selectionInput = inputs.addSelectionInput(CMD_ID + '_selection', 'Timbers',
+                                              'Select timbers to add to CSV Timber List')
     selectionInput.setSelectionLimits(1)
+    selectionInput.addSelectionFilter(adsk.core.SelectionCommandInput.Occurrences)
+
+    inputs.addTextBoxCommandInput(CMD_ID + '_partPrefix', 'Part Number Prefix', "LCTF-", 1, False)
 
     # TODO Connect to the events that are needed by this command.
     futil.add_handler(args.command.execute, command_execute, local_handlers=local_handlers)
@@ -108,6 +112,7 @@ def command_execute(args: adsk.core.CommandEventArgs):
 
     inputs = args.command.commandInputs
     selection: adsk.core.SelectionCommandInput = inputs.itemById(CMD_ID + '_selection')
+    partPrefix : adsk.core.TextBoxCommandInput = inputs.itemById(CMD_ID + '_partPrefix')
 
     # TODO ******************************** Your code here ********************************
 
@@ -116,17 +121,25 @@ def command_execute(args: adsk.core.CommandEventArgs):
 
     objects = getSelectedObjects(selection)
     obj_properties = {}
+    part_index = 1
 
+    # uses dictionary to eliminate duplicate occurrences in the output and obtain count
     for obj in objects:
         qty = obj.sourceComponent.allOccurrencesByComponent(obj.component).count
         obj_properties[obj.component.name] = [TimberData(obj).timberProperties(),
-                                              qty]  # uses dictionary to eliminate duplicate occurances in the output and obtain count
+                                                            qty]
+
+    for key in obj_properties.keys():
+        part_number = str(partPrefix.text) + str(part_index)
+        obj_properties[key].append(part_number)
+        part_index += 1
+
 
     # Do something interesting
     fileDialog = ui.createFileDialog()
     fileDialog.isMultiSelectEnabled = False
     fileDialog.title = "filename"
-    fileDialog.filter = 'CSV (*.csv);;TXT (*.txt);;All Files (*.*)'
+    fileDialog.filter = 'CSV (*.csv)'
     fileDialog.filterIndex = 0
     dialogResult = fileDialog.showSave()
     if dialogResult == adsk.core.DialogResults.DialogOK:
@@ -134,11 +147,14 @@ def command_execute(args: adsk.core.CommandEventArgs):
     else:
         return
     with open(filename, 'w', newline='') as csvfile:
-        fieldnames = ['Name', 'Qty', 'Length', 'Width', 'Height']
+        fieldnames = ['Name', 'Part #', 'Qty', 'Length - ft', 'Width - in', 'Height - in', "Total Boardfeet", "Exact Length - in", "Exact Width - in", "Exact Height - in"]
         writer = csv.writer(csvfile)
+        writer.writerow(["Length field is rounded up to the nearest even, and 2' is added for ordering purposes."])
         writer.writerow(fieldnames)
         for name, obj in obj_properties.items():
-            row = [name, obj[1], obj[0]['length'], obj[0]['width'], obj[0]['height']]
+            row = [name, obj[2], obj[1], obj[0]['length'], obj[0]['width'], obj[0]['height'],
+                   str(float(obj[0]["boardFeet"])*float(obj[1])), obj[0]["r_length"], obj[0]["r_width"],
+                   obj[0]["r_height"]]
             writer.writerow(row)
 
 
@@ -187,6 +203,7 @@ def command_destroy(args: adsk.core.CommandEventArgs):
 
 ### MY CODE
 
+
 def getSelectedObjects(selectionInput):
     objects = []
     for i in range(0, selectionInput.selectionCount):
@@ -224,9 +241,20 @@ class TimberData:
             min_box = self.fusionObject.orientedMinimumBoundingBox
             dimensions = [min_box.length, min_box.width, min_box.height] # access raw output from minimum bounding box object, names don't matter yet
             dim_sorted = sorted(dimensions, reverse=True)
-            length, width, height = str(dec_to_proper_frac(roundPartial((dim_sorted[0]) / 2.54, 0.25))) + '"', \
-                                    str(dec_to_proper_frac(roundPartial(dim_sorted[1] / 2.54, 0.25))) + '"', \
-                                    str(dec_to_proper_frac(roundPartial(dim_sorted[2] / 2.54, 0.25))) + '"'
+            length, width, height = ((dim_sorted[0]/12) / 2.54), \
+                                    str(dec_to_proper_frac(roundPartial(dim_sorted[1] / 2.54, 0.125))), \
+                                    str(dec_to_proper_frac(roundPartial(dim_sorted[2] / 2.54, 0.125))) # length value rounds to nearest foot
+            real_length, real_width, real_height = str(dec_to_proper_frac(roundPartial((dim_sorted[0]) / 2.54, .125))), \
+                                    str(dec_to_proper_frac(roundPartial(dim_sorted[1] / 2.54, 0.125))), \
+                                    str(dec_to_proper_frac(roundPartial(dim_sorted[2] / 2.54, 0.125)))
+            rounded_length = roundEven(length) + 2  # rounds to nearest 2 and then adds 2'
+            board_feet = rounded_length*(dim_sorted[1]/2.54)*((dim_sorted[2]/2.54)/12)
             sel_prop["Occurrence"] = self.fusionObject.name
-            sel_prop["length"], sel_prop["width"], sel_prop["height"] = length, width, height
+            sel_prop["length"], sel_prop["width"], sel_prop["height"], sel_prop["boardFeet"], sel_prop["r_length"], \
+                sel_prop["r_width"], sel_prop["r_height"] = \
+                rounded_length, width, height, round(board_feet), real_length, real_width, real_height
         return sel_prop
+
+
+def roundEven(f):
+    return math.ceil(f / 2.) * 2
