@@ -36,6 +36,69 @@ ICON_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'resource
 # they are not released and garbage collected.
 local_handlers = []
 
+wood_species = {
+        'Model': [True, 1.0],
+        'Ash, Black': [False, 0.833],
+        'Ash, Green': [False, 0.849],
+        'Ash, White': [False, 0.769],
+        'Basswood': [False, 0.673],
+        'Beech': [False, 0.865],
+        'Black Locust': [False, 0.929],
+        'Black Walnut': [False, 0.913],
+        'Bur Oak': [False, 0.993],
+        'Cedar, Alaska': [False, 0.577],
+        'Cedar, Eastern Red': [False, 0.593],
+        'Cedar, Northern White': [False, 0.449],
+        'Cedar, Southern White': [False, 0.416],
+        'Cedar, Western Red': [False, 0.432],
+        'Cherry, Black': [False, 0.721],
+        'Chestnut': [False, 0.881],
+        'Cypress, Southern': [False, 0.817],
+        'Douglas Fir, Coast Region': [False, 0.609],
+        'Douglas Fir, Rocky Mountains': [False, 0.561],
+        'Elm': [False, 0.865],
+        'Elm, red': [False, 0.785],
+        'Elm, white': [False, 0.881],
+        'Fir, Balsam': [False, 0.721],
+        'Fir, Commercial White': [False, 0.737],
+        'Gum, Black': [False, 0.721],
+        'Gum, Red': [False, 0.801],
+        'Hackberry': [False, 0.817],
+        'Hemlock, Eastern': [False, 0.801],
+        'Hemlock, Western': [False, 0.657],
+        'Hickory': [False, 1.025],
+        'Hickory, Pecan': [False, 0.993],
+        'Honeylocust': [False, 0.929],
+        'Larch': [False, 0.769],
+        'Locust': [False, 0.929],
+        'Maple, Bigleaf': [False, 0.753],
+        'Maple, Black': [False, 0.865],
+        'Maple, Red': [False, 0.801],
+        'Maple, Silver': [False, 0.721],
+        'Maple, Soft': [False, 0.801],
+        'Maple, Sugar': [False, 0.897],
+        'Mulberry': [False, 0.945],
+        'Oak, Post': [False, 1.025],
+        'Oak, Red': [False, 0.977],
+        'Oak, White': [False, 1.009],
+        'Osage Orange': [False, 1.025],
+        'Pecan': [False, 0.993],
+        'Pine, Lodgepole': [False, 0.625],
+        'Pine, Northern white': [False, 0.577],
+        'Pine, Norway': [False, 0.673],
+        'Pine, Ponderosa': [False, 0.721],
+        'Pine, Southern Yellow': [False, 0.849],
+        'Pine, Sugar': [False, 0.833],
+        'Poplar, Yellow': [False, 0.609],
+        'Redwood, American': [False, 0.801],
+        'Spruce, Canadian': [False, 0.545],
+        'Spruce, Engelman': [False, 0.625],
+        'Spruce, Sitka': [False, 0.529],
+        'Sycamore': [False, 1.009],
+        'Tamarack': [False, 0.753],
+        'Willow': [False, 0.865]
+    }
+
 # Executed when add-in is run.
 def start():
     # Create a command Definition.
@@ -89,12 +152,22 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
 
     # TODO Define the dialog for your command by adding different inputs to the command.
 
+    # Add first user entry
     selectionInput = inputs.addSelectionInput(CMD_ID + '_selection', 'Timbers',
-                                              'Select timbers to add to CSV Timber List')
-    selectionInput.setSelectionLimits(1)
-    selectionInput.addSelectionFilter(adsk.core.SelectionCommandInput.Occurrences)
+                                              'Select timbers to add to CSV Timber List')  # returns object(s) from selection
+    selectionInput.setSelectionLimits(1)  # set limit to >= 1
+    selectionInput.addSelectionFilter(adsk.core.SelectionCommandInput.Occurrences)  #  Basically limit selection to components
 
+    # Add second user entry
     inputs.addTextBoxCommandInput(CMD_ID + '_partPrefix', 'Part Number Prefix', "LCTF-", 1, False)
+
+    # Add third user entry
+    dropdownInput = inputs.addDropDownCommandInput(CMD_ID + "_species", 'Wood Species',
+                                                             adsk.core.DropDownStyles.TextListDropDownStyle)
+    dropdownItems = dropdownInput.listItems
+    for name, status in wood_species.items():
+        dropdownItems.add(name, status[0])
+
 
     # TODO Connect to the events that are needed by this command.
     futil.add_handler(args.command.execute, command_execute, local_handlers=local_handlers)
@@ -111,25 +184,32 @@ def command_execute(args: adsk.core.CommandEventArgs):
     futil.log(f'{CMD_NAME} Command Execute Event')
 
     inputs = args.command.commandInputs
+
+    #  creates objects from our above user inputs so we can pull data from them
     selection: adsk.core.SelectionCommandInput = inputs.itemById(CMD_ID + '_selection')
-    partPrefix : adsk.core.TextBoxCommandInput = inputs.itemById(CMD_ID + '_partPrefix')
+    partPrefix: adsk.core.TextBoxCommandInput = inputs.itemById(CMD_ID + '_partPrefix')
+    speciesData: adsk.core.DropDownCommandInput = inputs.itemById(CMD_ID + '_species')
+
 
     # TODO ******************************** Your code here ********************************
 
     # Get a reference to your command's inputs.
     futil.log(f'Inputs: {inputs}')
 
-    objects = getSelectedObjects(selection)
-    obj_properties = {}
-    part_index = 1
+    objects = getSelectedObjects(selection)  #  Calls separate function to validate and return components from selection.
+    obj_properties = {}  # create a dictionary to hold all the properties
+    part_index = 1  # start the part index at 1
 
     # uses dictionary to eliminate duplicate occurrences in the output and obtain count
     for obj in objects:
         qty = obj.sourceComponent.allOccurrencesByComponent(obj.component).count
-        obj_properties[obj.component.name] = [TimberData(obj).timberProperties(),
-                                                            qty]
 
-    for key in obj_properties.keys():
+        # Dictionary contains the following: component name, list of bounding box properties, qty of occurrences, mass, material
+        obj_properties[obj.component.name] = [TimberData(obj).timberProperties(),
+                                                qty, TimberData(obj).getMass(speciesData),
+                                                TimberData(obj).getMaterial(speciesData)]
+
+    for key in obj_properties.keys():  # Create part numbers iterating over dictionary to avoid duplicates
         part_number = str(partPrefix.text) + str(part_index)
         obj_properties[key].append(part_number)
         part_index += 1
@@ -146,17 +226,20 @@ def command_execute(args: adsk.core.CommandEventArgs):
         filename = fileDialog.filename
     else:
         return
+
+    # Writes CSV with all the collected fields
     with open(filename, 'w', newline='') as csvfile:
-        fieldnames = ['Name', 'Part #', 'Qty', 'Length - ft', 'Width - in', 'Height - in', "Total Boardfeet", "Exact Length - in", "Exact Width - in", "Exact Height - in"]
+        fieldnames = ['Name', 'Part #', 'Material', 'Qty', 'Order Length - ft', 'Order Width - in', 'Order Height - in',
+                      "Total Boardfeet", "Order Mass - kg", "Exact Length - in", "Exact Width - in", "Exact Height - in",
+                      'Exact Mass - kg']
         writer = csv.writer(csvfile)
         writer.writerow(["Length field is rounded up to the nearest even, and 2' is added for ordering purposes."])
         writer.writerow(fieldnames)
         for name, obj in obj_properties.items():
-            row = [name, obj[2], obj[1], obj[0]['length'], obj[0]['width'], obj[0]['height'],
-                   str(float(obj[0]["boardFeet"])*float(obj[1])), obj[0]["r_length"], obj[0]["r_width"],
-                   obj[0]["r_height"]]
+            row = [name, obj[4], obj[3], obj[1], obj[0]['length'], obj[0]['width'], obj[0]['height'],
+                   str(float(obj[0]["boardFeet"])*float(obj[1])), "placeholder", obj[0]["r_length"], obj[0]["r_width"],
+                   obj[0]["r_height"], obj[2]]
             writer.writerow(row)
-
 
 # This event handler is called when the command needs to compute a new preview in the graphics window.
 def command_preview(args: adsk.core.CommandEventArgs):
@@ -173,6 +256,8 @@ def command_input_changed(args: adsk.core.InputChangedEventArgs):
 
     # General logging for debug.
     futil.log(f'{CMD_NAME} Input Changed Event fired from a change to {changed_input.id}')
+    dropdownInput: adsk.core.DropDownCommandInput = inputs.itemById(CMD_ID + '_species')
+    futil.log(f'Selected: {dropdownInput.selectedItem.name}')
 
 
 # This event handler is called when the user interacts with any of the inputs in the dialog
@@ -205,6 +290,7 @@ def command_destroy(args: adsk.core.CommandEventArgs):
 
 
 def getSelectedObjects(selectionInput):
+    '''Builds a list of components. Contains duplicates on return.'''
     objects = []
     for i in range(0, selectionInput.selectionCount):
         selection = selectionInput.selection(i)
@@ -215,6 +301,7 @@ def getSelectedObjects(selectionInput):
 
 
 def dec_to_proper_frac(dec):
+    '''Float to arch notation for ordering.'''
     sign = "-" if dec < 0 else ""
     frac = Fraction(abs(dec))
     if frac.numerator % frac.denominator == 0:
@@ -230,10 +317,18 @@ def roundPartial(value, resolution):
 
 
 class TimberData:
+
+    """Where a timber is a component... this is the backbone of the add-in. Uses built in fusion command
+     "MinimumBoundingBox" to generate a tight box around the body. This creates the smallest size timber
+      necessary for complex curves, which saves money during ordering. This class also can process and store
+      data for other component properties."""
+
     def __init__(self, fusionObject):
         self.fusionObject = fusionObject
 
     def timberProperties(self):
+        '''Takes the input of a fusion object (component) and returns dimensions for a tight bounding box, and volume
+        measured in boardfeet. Units are also converted to arch style.'''
         sel_prop = {}
 
         if type(self.fusionObject) is adsk.fusion.BRepBody or \
@@ -254,6 +349,24 @@ class TimberData:
                 sel_prop["r_width"], sel_prop["r_height"] = \
                 rounded_length, width, height, round(board_feet), real_length, real_width, real_height
         return sel_prop
+
+    def getMass(self, species_data):
+        '''Requires command dropdown input from 'Command Created' function. If the default 'Model' parameter
+        is selected, it uses the default mass from fusion, applied individually to each timber. This is set by
+        the material assigned in Fusion. Otherwise, it references a dictionary of known densities for green lumber
+        and multiplies this by the volume of the object to produce the mass.'''
+        if species_data.selectedItem.name == 'Model':
+            return round(self.fusionObject.physicalProperties.mass, 1)
+        else:
+            mass = wood_species[species_data.selectedItem.name][1] * self.fusionObject.physicalProperties.volume
+            return round(mass/1000, 1)  # convert to kg
+
+    def getMaterial(self, species_data):
+        """Uses drop down input to return material type on csv output."""
+        if species_data.selectedItem.name == 'Model':
+            return self.fusionObject.getPhysicalProperties
+        else:
+            return species_data.selectedItem.name
 
 
 def roundEven(f):
