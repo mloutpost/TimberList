@@ -356,15 +356,19 @@ class TimberData:
         the material assigned in Fusion. Otherwise, it references a dictionary of known densities for green lumber
         and multiplies this by the volume of the object to produce the mass.'''
         if species_data.selectedItem.name == 'Model':
-            return round(self.fusionObject.physicalProperties.mass, 1)
+            kg = self.fusionObject.physicalProperties.mass
+            lbs = kg*2.204623
+            return str(round(kg, 1)) + " / " + str(round(lbs, 1))
         else:
             mass = wood_species[species_data.selectedItem.name][1] * self.fusionObject.physicalProperties.volume
-            return round(mass/1000, 1)  # convert to kg
+            kg = mass/1000  # convert to kg
+            lbs = kg*2.204623
+            return str(round(kg, 1)) + " / " + str(round(lbs, 1))
 
     def getMaterial(self, species_data):
         """Uses drop down input to return material type on csv output."""
         if species_data.selectedItem.name == 'Model':
-            return self.fusionObject.getPhysicalProperties
+            return self.fusionObject.component.material.name
         else:
             return species_data.selectedItem.name
 
