@@ -231,7 +231,7 @@ def command_execute(args: adsk.core.CommandEventArgs):
     with open(filename, 'w', newline='') as csvfile:
         fieldnames = ['Name', 'Part #', 'Material', 'Qty', 'Order Length - ft', 'Order Width - in', 'Order Height - in',
                       "Total Boardfeet", "Order Mass - kg", "Exact Length - in", "Exact Width - in", "Exact Height - in",
-                      'Exact Mass - kg']
+                      'Exact Mass - lbs']
         writer = csv.writer(csvfile)
         writer.writerow(["Length field is rounded up to the nearest even, and 2' is added for ordering purposes."])
         writer.writerow(fieldnames)
@@ -358,12 +358,12 @@ class TimberData:
         if species_data.selectedItem.name == 'Model':
             kg = self.fusionObject.physicalProperties.mass
             lbs = kg*2.204623
-            return str(round(kg, 1)) + " / " + str(round(lbs, 1))
+            return str(round(lbs, 1))
         else:
             mass = wood_species[species_data.selectedItem.name][1] * self.fusionObject.physicalProperties.volume
             kg = mass/1000  # convert to kg
             lbs = kg*2.204623
-            return str(round(kg, 1)) + " / " + str(round(lbs, 1))
+            return str(round(lbs, 1))
 
     def getMaterial(self, species_data):
         """Uses drop down input to return material type on csv output."""
