@@ -238,7 +238,7 @@ def command_execute(args: adsk.core.CommandEventArgs):
         for name, obj in obj_properties.items():
             row = [name, obj[4], obj[3], obj[1], obj[0]['length'], obj[0]['width'], obj[0]['height'],
                    str(float(obj[0]["boardFeet"])*float(obj[1])), "placeholder", obj[0]["r_length"], obj[0]["r_width"],
-                   obj[0]["r_height"], obj[2]]
+                   obj[0]["r_height"], obj[2]]  # weight
             writer.writerow(row)
 
 # This event handler is called when the command needs to compute a new preview in the graphics window.
